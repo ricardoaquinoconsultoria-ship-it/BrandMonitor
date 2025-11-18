@@ -182,7 +182,6 @@ async function runAnalysis(){
     }
 
     filteredItems.forEach((it, idx)=>{
-      // Encontrar el índice original para el modal
       const originalIndex = items.findIndex(originalItem => originalItem.link === it.link);
       html += `<div class="list-item">
         <strong>${idx+1}. ${escapeHtml(it.title)}</strong>
@@ -192,7 +191,7 @@ async function runAnalysis(){
     });
 
     document.getElementById('resultsArea').innerHTML = html;
-    window.lastAnalysis = { query, loc, totalResults, level, items }; // Guardar items originales
+    window.lastAnalysis = { query, loc, totalResults, level, items };
     document.getElementById('btnCSV').disabled = false;
     setStatus('Análisis completado.', true);
 
@@ -239,11 +238,11 @@ function downloadCSV(){
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `${(window.lastAnalysis.query+'_'+window.lastAnalysis.loc).replace(/\s+/g,'_')}_competencia.csv`;
+  a.href = url;
+  a.download = `${(window.lastAnalysis.query+'_'+window.lastAnalysis.loc).replace(/\s+/g,'_')}_competencia.csv`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-// Cerrar modal al hacer clic fuera del contenido
 document.getElementById('modal').addEventListener('click', function(e) {
   if (e.target === this) {
     closeModal();
