@@ -75,10 +75,9 @@
 </div>
 
 <script>
-// NOTA: Debes reemplazar "TU_API_KEY" y "TU_CX_ID" con tus propias credenciales
-// de la API de Google Custom Search.
-const apiKey = "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k"; // ¡Reemplaza esto!
-const cx = "23fb969721a4f4658"; // ¡Reemplaza esto!
+// CREDENCIALES CONFIGURADAS POR EL USUARIO
+const apiKey = "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k";
+const cx = "23fb969721a4f4658";
 
 function setStatus(html, visible=true){
   const s = document.getElementById('status');
@@ -92,19 +91,12 @@ async function runAnalysis(){
   const limit = parseInt(document.getElementById('limit').value || "10");
   const filter = (document.getElementById('filter').value || "").trim().toLowerCase();
   
-  // Validación simple para evitar alertas nativas
+  // Validación simple
   if(!q || !loc){ 
     setStatus('Por favor, ingresa un nicho y un lugar para analizar.', true);
     return; 
   }
-
-  // Validar API Key y CX
-  if (apiKey === "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k" || cx === "23fb969721a4f4658") {
-    setStatus('Error: Por favor, configura tu propia API Key y CX ID en el código HTML (líneas 119 y 120) para que la aplicación funcione.', true);
-    document.getElementById('resultsArea').innerHTML = `<p style="color:red;font-weight:bold;">La aplicación no está configurada. Debes editar el archivo <code>index.html</code> y reemplazar los valores de <code>apiKey</code> y <code>cx</code> con tus propias credenciales de Google Custom Search API.</p>`;
-    return;
-  }
-
+  
   document.getElementById('btnSearch').disabled = true;
   document.getElementById('btnCSV').disabled = true;
   setStatus('Buscando en Google... esto puede tardar unos segundos');
@@ -163,14 +155,14 @@ async function runAnalysis(){
         disadvantages.push('Opiniones negativas predominantes');
       }
 
-      // --- ¡NUEVO! Análisis de Horarios ---
+      // Análisis de Horarios
       if(lowerSnippet.match(/(24 horas|24\/7|siempre abierto)/gi)){
         advantages.push('Servicio 24 horas');
       } else if (lowerSnippet.match(/(horario|abierto|l-v|lunes a viernes|semana|fin de semana)/gi)) {
         advantages.push('Información de horario detectada');
       } else {
         disadvantages.push('No se menciona horario de servicio');
-  D     }
+      }
 
       return { title, link, snippet, positive, negative, repScore, prices, advantages, disadvantages };
     });
