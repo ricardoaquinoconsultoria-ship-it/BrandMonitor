@@ -21,16 +21,15 @@
   .low{background:#e6fff0;color:#036a3e}
   .medium{background:#fff6e6;color:#a16b00}
   .high{background:#ffe6e6;color:#8a0000}
-  .actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
-  .small{font-size:13px;color:#666;margin-top:6px}
-  pre{white-space:pre-wrap;font-size:13px}
+  .details-box{background:#eef3ff;padding:10px;border-radius:8px;margin-top:6px;display:none}
+  .advantage-box{background:#fff9e6;padding:10px;border-radius:8px;margin-top:6px;display:none;border:1px dashed #a16b00}
 </style>
 </head>
 <body>
 
 <div class="card">
   <h1>Analizador de Competencia Local</h1>
-  <p class="small">Ingresa un <strong>nicho o tipo de negocio</strong> y la <strong>ciudad / zona</strong>. La app buscará competidores, estimará precios y dará un análisis rápido de reputación y competencia.</p>
+  <p class="small">Ingresa un <strong>nicho o tipo de negocio</strong> y la <strong>ciudad / zona</strong>. La app buscará competidores y mostrará su reputación y ventajas competitivas.</p>
 
   <label>Qué quieres analizar (nicho / negocio)</label>
   <input id="q" placeholder="Ej: lavandería, gimnasio, taller mecánico">
@@ -59,15 +58,12 @@
   </div>
 
   <div id="status" class="summary" style="display:none;margin-top:14px"></div>
-
   <div id="resultsArea"></div>
 </div>
 
 <script>
-/* ---------- CONFIG: usa tu API KEY y CX aquí ---------- */
-const apiKey = "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k"; // si la regeneras reemplaza aquí
+const apiKey = "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k";
 const cx = "23fb969721a4f4658";
-/* ------------------------------------------------------ */
 
 function setStatus(html, visible=true){
   const s = document.getElementById('status');
@@ -80,7 +76,6 @@ async function runAnalysis(){
   const loc = (document.getElementById('loc').value || "").trim();
   const limit = parseInt(document.getElementById('limit').value || "10");
   const filter = (document.getElementById('filter').value || "").trim().toLowerCase();
-
   if(!q || !loc){ alert('Ingresa nicho y lugar.'); return; }
 
   document.getElementById('btnSearch').disabled = true;
@@ -88,144 +83,85 @@ async function runAnalysis(){
   setStatus('Buscando en Google... esto puede tardar unos segundos');
 
   const query = `${q} ${loc}`;
-  // hacemos la petición al Custom Search
   const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&num=${limit}`;
 
   try {
     const res = await fetch(url);
     const data = await res.json();
-
-    // totalResults para medir competencia
     const totalResults = parseInt(data.searchInformation?.totalResults || 0);
-
-    // determinar nivel de competencia por heurística
     let level = 'Baja', levelClass='low';
     if(totalResults < 3000){ level='Baja'; levelClass='low'; }
     else if(totalResults < 15000){ level='Media'; levelClass='medium'; }
     else { level='Alta'; levelClass='high'; }
 
-    // procesar items
     const items = (data.items || []).slice(0, limit).map(it => {
       const title = it.title || "";
       const link = it.link || "";
       const snippet = it.snippet || "";
-      // extraer precios aproximados (regex para monedas y números)
-      const priceMatches = snippet.match(/(?:RD\$|\$|USD|USD|EUR)?\s?([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?)/g) || [];
-      // limpieza de precios
-      const prices = priceMatches.map(p => p.replace(/\s+/g,''));
-      // simple reputation score: contar palabras positivas vs negativas en snippet/title
       const positive = (snippet.match(/(excelente|bueno|recomendado|positivo|5 estrellas|5-star|top|mejor|recomiendan)/gi) || []).length;
       const negative = (snippet.match(/(malo|queja|estafa|fraude|reclam|problema|defectuoso|mala reseña|denunci)/gi) || []).length;
-      const repScore = Math.max(0, Math.min(100, 60 + (positive - negative)*15)); // heurística simple
-      return { title, link, snippet, prices, positive, negative, repScore };
+      const repScore = Math.max(0, Math.min(100, 60 + (positive - negative)*15));
+      // precios aproximados
+      const prices = snippet.match(/(?:RD\$|\$|USD|EUR)?\s?([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?)/g) || [];
+      // ventajas competitivas heurísticas
+      let advantages = [];
+      if(snippet.toLowerCase().includes('centro') || snippet.toLowerCase().includes('cercan')){
+        advantages.push('Ubicación céntrica / fácil acceso');
+      }
+      if(prices.length) advantages.push(`Precios aproximados detectados: ${prices.join(', ')}`);
+      if(repScore>75) advantages.push('Popularidad alta entre reseñas');
+      if(positive>negative) advantages.push('Opiniones mayormente positivas');
+      return { title, link, snippet, positive, negative, repScore, prices, advantages };
     });
 
-    // calc resumen: top competidores por repScore y por aparición
-    const topByRep = items.slice().sort((a,b)=>b.repScore - a.repScore).slice(0,5);
-    const topByPresence = items.slice(0,5);
+    const html = [];
+    html.push(`<div class="summary"><strong>Consulta:</strong> ${escapeHtml(query)} &nbsp; • &nbsp; <strong>Resultados estimados:</strong> ${totalResults}</div>`);
+    html.push(`<div style="margin-top:10px"><strong>Nivel de competencia:</strong> <span class="badge ${levelClass}">${level}</span></div>`);
 
-    // detectar oportunidades similares en la zona (heurística usando keywords del nicho)
-    const baseOpportunities = [
-      "Pintura de casas y apartamentos",
-      "Limpieza profunda / Airbnb",
-      "Instalación de cámaras de seguridad",
-      "Fumigación profesional",
-      "Lavado de muebles y colchones",
-      "Reparación de electrodomésticos",
-      "Servicios de jardinería",
-      "Remodelaciones pequeñas",
-      "Administración de alquileres / Airbnbs",
-      "Lavandería / planchado profesional"
-    ];
-
-    // si competencia baja: mostrar top 6 oportunidades; si media: sugerir nichos de servicio; si alta: sugerir servicios complementarios
-    let opportunities = [];
-    if(level==='Baja'){
-      opportunities = baseOpportunities.slice(0,6);
-    } else if(level==='Media'){
-      opportunities = baseOpportunities.slice(2,9);
-    } else {
-      opportunities = [
-        "Consultoría de marketing digital local",
-        "Optimización SEO local",
-        "Publicidad en redes focalizada por zona",
-        "Servicios complementarios (mantenimiento, delivery, atención VIP)"
-      ];
-    }
-
-    // aplicar filtro opcional
-    const filteredItems = filter ? items.filter(it => (it.title+it.snippet+it.link).toLowerCase().includes(filter)) : items;
-
-    // construir HTML
-    let html = '';
-    html += `<div class="summary"><strong>Consulta:</strong> ${escapeHtml(query)} &nbsp; • &nbsp; <strong>Resultados estimados:</strong> ${totalResults}</div>`;
-    html += `<div style="margin-top:10px"><strong>Nivel de competencia:</strong> <span class="badge ${levelClass}">${level}</span></div>`;
-    html += `<div style="margin-top:12px"><strong>Top recomendadas (por reputación):</strong></div>`;
-    html += `<div>`;
-    topByRep.forEach(t=>{
-      html += `<div class="list-item"><strong>${escapeHtml(t.title)}</strong><div class="meta">Reputación estimada: ${t.repScore}/100 &nbsp; • &nbsp; Precios detectados: ${t.prices.join(', ') || 'N/A'}</div><div style="margin-top:8px">${escapeHtml(t.snippet)}<div><a href="${t.link}" target="_blank">${t.link}</a></div></div></div>`;
+    items.forEach((it, idx)=>{
+      html.push(`<div class="list-item">
+        <strong>${idx+1}. ${escapeHtml(it.title)}</strong>
+        <div class="meta">Reputación: ${it.repScore}/100</div>
+        <div style="margin-top:6px"><button onclick="toggleDetails(${idx})">Ver detalles</button></div>
+        <div id="details-${idx}" class="details-box">
+          <strong>Positivo:</strong> ${it.positive} palabras<br>
+          <strong>Negativo:</strong> ${it.negative} palabras<br>
+          <strong>Snippet:</strong> ${escapeHtml(it.snippet)}<br>
+          <strong>Link:</strong> <a href="${it.link}" target="_blank">${it.link}</a>
+        </div>
+        <div id="advantages-${idx}" class="advantage-box">
+          <strong>Ventajas competitivas:</strong><br>
+          ${it.advantages.length ? '<ul>'+it.advantages.map(a=>' <li>'+escapeHtml(a)+'</li>').join('')+'</ul>' : 'No detectadas'}
+        </div>
+      </div>`);
     });
-    html += `</div>`;
 
-    html += `<h3 style="margin-top:14px">Competidores encontrados (${filteredItems.length}):</h3>`;
-    if(filteredItems.length === 0){
-      html += `<p>No hay resultados que cumplan el filtro.</p>`;
-    } else {
-      filteredItems.forEach((it, idx) => {
-        html += `<div class="list-item"><strong>${idx+1}. ${escapeHtml(it.title)}</strong><div class="meta">Reputación: ${it.repScore}/100 &nbsp; • &nbsp; Precios: ${it.prices.join(', ') || 'N/A'}</div><div style="margin-top:8px">${escapeHtml(it.snippet)}<div style="margin-top:6px"><a href="${it.link}" target="_blank">${it.link}</a></div></div></div>`;
-      });
-    }
-
-    html += `<h3 style="margin-top:12px">🚀 Oportunidades con baja competencia en ${escapeHtml(loc)}:</h3>`;
-    html += `<ul>`;
-    opportunities.forEach(o => html += `<li>${o}</li>`);
-    html += `</ul>`;
-
-    // recomendaciones accionables
-    html += `<h3 style="margin-top:12px">Sugerencias prácticas:</h3>`;
-    html += `<ul>`;
-    if(level==='Baja'){
-      html += `<li>Crear página web simple con servicios y contacto (1 página = más presencia).</li>`;
-      html += `<li>Registrar tu negocio en Google Business Profile y recibir reseñas.</li>`;
-      html += `<li>Ofrecer paquetes iniciales para captar 10 clientes locales.</li>`;
-    } else if(level==='Media'){
-      html += `<li>Optimizar páginas con keywords locales (ej: "${escapeHtml(q)} ${escapeHtml(loc)}").</li>`;
-      html += `<li>Publicar 2–4 posts semanales + Google Business fotos profesionales.</li>`;
-      html += `<li>Hacer campañas pagadas pequeñas para captar primeros clientes.</li>`;
-    } else {
-      html += `<li>Invertir en SEO profesional y contenido en video.</li>`;
-      html += `<li>Distinguirse con servicios premium o nichos (p.ej. mantenimiento VIP para Airbnbs).</li>`;
-      html += `<li>Alianzas con negocios complementarios (hoteles, inmobiliarias).</li>`;
-    }
-    html += `</ul>`;
-
-    // botones/acciones
-    html += `<div class="actions"><button onclick="copySummary()">Copiar resumen</button><button onclick="openCSVPreview()">Ver CSV</button></div>`;
-
-    // render
-    document.getElementById('resultsArea').innerHTML = html;
-
-    // habilitar CSV con items guardados en window
+    document.getElementById('resultsArea').innerHTML = html.join('');
     window.lastAnalysis = { query, loc, totalResults, level, items };
     document.getElementById('btnCSV').disabled = false;
     setStatus('Análisis completado.', true);
+
   } catch(err){
     console.error(err);
-    setStatus('Error al consultar la API. Revisa tu API Key / cuota o verifica la red.', true);
+    setStatus('Error al consultar la API.', true);
     document.getElementById('resultsArea').innerHTML = '';
-  } finally {
-    document.getElementById('btnSearch').disabled = false;
-  }
+  } finally { document.getElementById('btnSearch').disabled = false; }
 }
 
-// helpers
+function toggleDetails(idx){
+  const d = document.getElementById(`details-${idx}`);
+  const a = document.getElementById(`advantages-${idx}`);
+  if(d) d.style.display = d.style.display==='none'?'block':'none';
+  if(a) a.style.display = a.style.display==='none'?'block':'none';
+}
+
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function downloadCSV(){
   if(!window.lastAnalysis) return alert('No hay datos para exportar. Haz un análisis primero.');
-  const rows = [['title','link','snippet','repScore','prices','positive','negative']];
+  const rows = [['title','link','snippet','repScore','positive','negative','advantages']];
   window.lastAnalysis.items.forEach(it=>{
-    rows.push([it.title, it.link, it.snippet, it.repScore, it.prices.join('|'), it.positive, it.negative]);
+    rows.push([it.title, it.link, it.snippet, it.repScore, it.positive, it.negative,it.advantages.join('|')]);
   });
   const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
@@ -233,26 +169,6 @@ function downloadCSV(){
   const a = document.createElement('a');
   a.href = url; a.download = `${(window.lastAnalysis.query+'_'+window.lastAnalysis.loc).replace(/\s+/g,'_')}_competencia.csv`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-}
-
-function copySummary(){
-  if(!window.lastAnalysis) return alert('Primero ejecuta un análisis.');
-  const s = `Análisis: ${window.lastAnalysis.query} en ${window.lastAnalysis.loc}
-Resultados aproximados: ${window.lastAnalysis.totalResults}
-Nivel: ${window.lastAnalysis.level}
-Top competidores: ${window.lastAnalysis.items.slice(0,5).map(i=>i.title).join(' | ')}
-`;
-  navigator.clipboard?.writeText(s).then(()=> alert('Resumen copiado al portapapeles.'));
-}
-
-function openCSVPreview(){
-  if(!window.lastAnalysis) return alert('No hay datos.');
-  let txt = 'title,link,repScore,prices\\n';
-  window.lastAnalysis.items.forEach(it => {
-    txt += `"${it.title.replace(/"/g,'""')}","${it.link}","${it.repScore}","${it.prices.join('|')}"\\n`;
-  });
-  const w = window.open('', '_blank');
-  w.document.write('<pre>'+escapeHtml(txt)+'</pre>');
 }
 </script>
 </body>
