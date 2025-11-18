@@ -35,7 +35,7 @@
 
 <div class="card">
   <h1>Analizador de Competencia Local</h1>
-  <p class="small">Ingresa un <strong>nicho o tipo de negocio</strong> y la <strong>ciudad / zona</strong>. La app mostrará sus competidores y un análisis de ventajas y desventajas.</p>
+  <p class="small">Ingresa un <strong>nicho o tipo de negocio</strong> y la <strong>ciudad / zona</strong>. La app mostrará competidores, su reputación y ventajas/desventajas competitivas.</p>
 
   <label>Qué quieres analizar (nicho / negocio)</label>
   <input id="q" placeholder="Ej: lavandería, gimnasio, taller mecánico">
@@ -143,19 +143,18 @@ async function runAnalysis(){
       return { title, link, snippet, positive, negative, repScore, prices, advantages, disadvantages };
     });
 
-    const html = [];
-    html.push(`<div class="summary"><strong>Consulta:</strong> ${escapeHtml(query)} &nbsp; • &nbsp; <strong>Resultados estimados:</strong> ${totalResults}</div>`);
-    html.push(`<div style="margin-top:10px"><strong>Nivel de competencia:</strong> <span class="badge ${levelClass}">${level}</span></div>`);
+    let html = `<div class="summary"><strong>Consulta:</strong> ${escapeHtml(query)} &nbsp; • &nbsp; <strong>Resultados estimados:</strong> ${totalResults}</div>`;
+    html += `<div style="margin-top:10px"><strong>Nivel de competencia:</strong> <span class="badge ${levelClass}">${level}</span></div>`;
 
     items.forEach((it, idx)=>{
-      html.push(`<div class="list-item">
+      html += `<div class="list-item">
         <strong>${idx+1}. ${escapeHtml(it.title)}</strong>
         <div class="meta">Reputación: ${it.repScore}/100</div>
         <div style="margin-top:6px"><button onclick="openModal(${idx})">Ver detalles y ventajas</button></div>
-      </div>`);
+      </div>`;
     });
 
-    document.getElementById('resultsArea').innerHTML = html.join('');
+    document.getElementById('resultsArea').innerHTML = html;
     window.lastAnalysis = { query, loc, totalResults, level, items };
     document.getElementById('btnCSV').disabled = false;
     setStatus('Análisis completado.', true);
@@ -176,7 +175,7 @@ function openModal(idx){
   html += `<p><strong>Reputación:</strong> ${item.repScore}/100</p>`;
   html += `<p><strong>Snippet:</strong> ${escapeHtml(item.snippet)}</p>`;
   html += `<p><strong>Link:</strong> <a href="${item.link}" target="_blank">${item.link}</a></p>`;
-  html += `<h4>Ventajas:</h4>`;
+  html += `<h4>Ventajas competitivas:</h4>`;
   html += item.advantages.length ? '<ul>'+item.advantages.map(a=>'<li class="advantage">'+escapeHtml(a)+'</li>').join('')+'</ul>' : '<p class="advantage">No detectadas</p>';
   html += `<h4>Desventajas:</h4>`;
   html += item.disadvantages.length ? '<ul>'+item.disadvantages.map(d=>'<li class="disadvantage">'+escapeHtml(d)+'</li>').join('')+'</ul>' : '<p class="disadvantage">No detectadas</p>';
