@@ -41,7 +41,7 @@
   <input id="q" placeholder="Ej: lavandería, gimnasio, taller mecánico">
 
   <label>Lugar (ciudad, provincia, barrio)</label>
-  <input id="loc" placeholder="Ej: Puerto Plata, Las Terrenas, Santiago">
+  <input id="loc" placeholder="Ej: San Cristóbal, Santo Domingo, Santiago">
 
   <div class="row">
     <div class="col">
@@ -67,7 +67,6 @@
   <div id="resultsArea"></div>
 </div>
 
-<!-- Modal flotante -->
 <div id="modal" class="modal-bg">
   <div class="modal-content">
     <button class="close-btn" onclick="closeModal()">X</button>
@@ -76,8 +75,8 @@
 </div>
 
 <script>
-const apiKey = "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k";
-const cx = "23fb969721a4f4658";
+const apiKey = "AIzaSyBQxW18C0o3crY0Wn7ty8gvF4G6DllVo4k"; // Recuerda usar tu propia API Key
+const cx = "23fb969721a4f4658"; // Recuerda usar tu propio CX ID
 
 function setStatus(html, visible=true){
   const s = document.getElementById('status');
@@ -112,23 +111,29 @@ async function runAnalysis(){
       const title = it.title || "";
       const link = it.link || "";
       const snippet = it.snippet || "";
+      const lowerSnippet = snippet.toLowerCase();
       const positive = (snippet.match(/(excelente|bueno|recomendado|positivo|5 estrellas|5-star|top|mejor|recomiendan)/gi) || []).length;
       const negative = (snippet.match(/(malo|queja|estafa|fraude|reclam|problema|defectuoso|mala reseña|denunci)/gi) || []).length;
       const repScore = Math.max(0, Math.min(100, 60 + (positive - negative)*15));
       const prices = snippet.match(/(?:RD\$|\$|USD|EUR)?\s?([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?)/g) || [];
 
-      // ventajas y desventajas heurísticas
       let advantages = [], disadvantages = [];
-      if(snippet.toLowerCase().includes('centro') || snippet.toLowerCase().includes('cercan')){
+      
+      // Análisis de Ubicación
+      if(lowerSnippet.includes('centro') || lowerSnippet.includes('cercano') || lowerSnippet.includes('céntrico')){
         advantages.push('Ubicación céntrica / fácil acceso');
       } else {
         disadvantages.push('Lejos del centro / acceso limitado');
       }
+      
+      // Análisis de Precios
       if(prices.length){
         advantages.push(`Precios aproximados: ${prices.join(', ')}`);
       } else {
         disadvantages.push('Precios no disponibles o altos');
       }
+      
+      // Análisis de Reputación
       if(repScore>75){
         advantages.push('Popularidad alta entre reseñas');
       } else {
@@ -138,6 +143,15 @@ async function runAnalysis(){
         advantages.push('Opiniones mayormente positivas');
       } else if(negative>positive){
         disadvantages.push('Opiniones negativas predominantes');
+      }
+
+      // --- ¡NUEVO! Análisis de Horarios ---
+      if(lowerSnippet.match(/(24 horas|24\/7|siempre abierto)/gi)){
+        advantages.push('Servicio 24 horas');
+      } else if (lowerSnippet.match(/(horario|abierto|l-v|lunes a viernes|semana|fin de semana)/gi)) {
+        advantages.push('Información de horario detectada');
+      } else {
+        disadvantages.push('No se menciona horario de servicio');
       }
 
       return { title, link, snippet, positive, negative, repScore, prices, advantages, disadvantages };
@@ -150,7 +164,7 @@ async function runAnalysis(){
       html += `<div class="list-item">
         <strong>${idx+1}. ${escapeHtml(it.title)}</strong>
         <div class="meta">Reputación: ${it.repScore}/100</div>
-        <div style="margin-top:6px"><button onclick="openModal(${idx})">Ver detalles y ventajas</button></div>
+        <div style="margin-top:6px"><button onclick="openModal(${idx})">Detalles</button></div>
       </div>`;
     });
 
@@ -171,6 +185,7 @@ function openModal(idx){
   const body = document.getElementById('modalBody');
   const item = window.lastAnalysis.items[idx];
   if(!item) return;
+  
   let html = `<h3>${escapeHtml(item.title)}</h3>`;
   html += `<p><strong>Reputación:</strong> ${item.repScore}/100</p>`;
   html += `<p><strong>Snippet:</strong> ${escapeHtml(item.snippet)}</p>`;
@@ -179,13 +194,12 @@ function openModal(idx){
   html += item.advantages.length ? '<ul>'+item.advantages.map(a=>'<li class="advantage">'+escapeHtml(a)+'</li>').join('')+'</ul>' : '<p class="advantage">No detectadas</p>';
   html += `<h4>Desventajas:</h4>`;
   html += item.disadvantages.length ? '<ul>'+item.disadvantages.map(d=>'<li class="disadvantage">'+escapeHtml(d)+'</li>').join('')+'</ul>' : '<p class="disadvantage">No detectadas</p>';
+  
   body.innerHTML = html;
   modal.style.display = 'flex';
 }
 
-function closeModal(){
-  document.getElementById('modal').style.display = 'none';
-}
+function closeModal(){ document.getElementById('modal').style.display = 'none'; }
 
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
